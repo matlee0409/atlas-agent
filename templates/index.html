@@ -826,23 +826,56 @@
           </template>
 
           <div class="field-gap" x-show="selectedProvider && providerMap[selectedProvider]?.key">
-            <label class="field-label">API Key</label>
+            <label class="field-label" x-text="providerMap[selectedProvider]?.keyLabel || 'API Key'"></label>
             <input type="password"
                    :value="selectedProvider ? (vars[providerMap[selectedProvider]?.key]||'') : ''"
                    @input="if(selectedProvider && providerMap[selectedProvider]?.key) vars[providerMap[selectedProvider].key]=$event.target.value"
                    :placeholder="selectedProvider ? (providerMap[selectedProvider]?.placeholder||'Paste your API key') : ''">
           </div>
 
+          <!-- AWS Bedrock extra fields (after Access Key ID) -->
+          <template x-if="selectedProvider === 'AWS Bedrock'">
+            <div>
+              <div class="field-gap">
+                <label class="field-label">AWS Secret Access Key</label>
+                <input type="password" :value="vars.AWS_SECRET_ACCESS_KEY||''" @input="vars.AWS_SECRET_ACCESS_KEY=$event.target.value"
+                       placeholder="wJalr...">
+              </div>
+              <div class="field-gap">
+                <label class="field-label">AWS Region</label>
+                <input type="text" :value="vars.AWS_DEFAULT_REGION||''" @input="vars.AWS_DEFAULT_REGION=$event.target.value"
+                       placeholder="us-east-1">
+                <p class="hint">Region where your Bedrock models are enabled (e.g. <code>us-east-1</code>, <code>us-west-2</code>, <code>eu-west-1</code>).</p>
+              </div>
+            </div>
+          </template>
+
+          <!-- Azure Foundry extra field (after API Key) -->
+          <template x-if="selectedProvider === 'Azure Foundry'">
+            <div>
+              <div class="field-gap">
+                <label class="field-label">Endpoint URL</label>
+                <input type="text" :value="vars.AZURE_FOUNDRY_BASE_URL||''" @input="vars.AZURE_FOUNDRY_BASE_URL=$event.target.value"
+                       placeholder="https://your-resource.services.ai.azure.com/models">
+                <p class="hint">Your Azure AI Foundry endpoint URL — required.</p>
+              </div>
+            </div>
+          </template>
+
           <div class="field-gap" x-show="selectedProvider">
             <label class="field-label">LLM Model</label>
             <input type="text" :value="vars.LLM_MODEL||''" @input="vars.LLM_MODEL=$event.target.value"
-                   :placeholder="selectedProvider === 'xAI Grok (SuperGrok)' ? 'e.g. grok-4.3'
+                   :placeholder="selectedProvider === 'xAI Grok (SuperGrok)' || selectedProvider === 'xAI' ? 'e.g. grok-4.3'
+                     : selectedProvider === 'Anthropic (Claude)' ? 'e.g. claude-sonnet-4-20250514'
+                     : selectedProvider === 'AWS Bedrock' ? 'e.g. anthropic.claude-3-5-sonnet-20241022-v2:0'
                      : selectedProvider === 'Fireworks AI' ? 'e.g. accounts/fireworks/models/llama-v3p1-70b-instruct'
-                     : selectedProvider === 'Custom Endpoint' ? 'model-id as required by the endpoint'
+                     : selectedProvider === 'Custom Endpoint' || selectedProvider === 'Azure Foundry' ? 'model-id as required by the endpoint'
                      : 'e.g. openai/gpt-4o-mini  or  deepseek/deepseek-chat'">
-            <p class="hint" x-show="selectedProvider === 'xAI Grok (SuperGrok)'">Model name only — e.g. <code>grok-4.3</code>, <code>grok-4.20-0309-reasoning</code></p>
+            <p class="hint" x-show="selectedProvider === 'xAI Grok (SuperGrok)' || selectedProvider === 'xAI'">e.g. <code>grok-4.3</code>, <code>grok-4.20-0309-reasoning</code></p>
+            <p class="hint" x-show="selectedProvider === 'Anthropic (Claude)'">e.g. <code>claude-sonnet-4-20250514</code>, <code>claude-opus-4-20250115</code></p>
+            <p class="hint" x-show="selectedProvider === 'AWS Bedrock'">e.g. <code>anthropic.claude-3-5-sonnet-20241022-v2:0</code>, <code>us.meta.llama3-2-90b-instruct-v1:0</code></p>
             <p class="hint" x-show="selectedProvider === 'Fireworks AI'">Format: <code>accounts/fireworks/models/&lt;model-id&gt;</code></p>
-            <p class="hint" x-show="selectedProvider !== 'xAI Grok (SuperGrok)' && selectedProvider !== 'Fireworks AI' && selectedProvider !== 'Custom Endpoint'">OpenRouter format: <code>provider/model-name</code></p>
+            <p class="hint" x-show="!['xAI Grok (SuperGrok)','xAI','Anthropic (Claude)','AWS Bedrock','Fireworks AI','Custom Endpoint','Azure Foundry'].includes(selectedProvider) && selectedProvider">Check your provider's docs for model names. OpenRouter format: <code>provider/model-name</code></p>
           </div>
         </div>
 
@@ -912,9 +945,17 @@
                               style="font-size:10px;font-family:var(--font-mono);background:rgba(98,114,255,.15);color:var(--accent2);padding:2px 6px;border-radius:4px;">
                           OAuth
                         </span>
-                        <span x-show="!cp.isOauth && !cp.isCustom"
+                        <span x-show="!cp.isOauth && !cp.isCustom && !cp.isBedrock && !cp.isAzure"
                               style="font-size:10px;font-family:var(--font-mono);background:rgba(63,185,80,.12);color:var(--green);padding:2px 6px;border-radius:4px;">
                           API key set
+                        </span>
+                        <span x-show="cp.isBedrock"
+                              style="font-size:10px;font-family:var(--font-mono);background:rgba(255,153,0,.15);color:#f90;padding:2px 6px;border-radius:4px;">
+                          AWS
+                        </span>
+                        <span x-show="cp.isAzure"
+                              style="font-size:10px;font-family:var(--font-mono);background:rgba(0,120,212,.15);color:#0078d4;padding:2px 6px;border-radius:4px;">
+                          Azure
                         </span>
                         <span x-show="cp.isCustom"
                               style="font-size:10px;font-family:var(--font-mono);background:rgba(210,153,34,.12);color:var(--yellow);padding:2px 6px;border-radius:4px;">
@@ -1387,11 +1428,21 @@ function app() {
       'HuggingFace':          { key: 'HF_TOKEN',             modelKey: '_MODEL_HF_TOKEN',            placeholder: 'hf_...'   },
       'NVIDIA NIM':           { key: 'NVIDIA_API_KEY',       modelKey: '_MODEL_NVIDIA_API_KEY',      placeholder: 'nvapi-...' },
       'NovitaAI':             { key: 'NOVITA_API_KEY',       modelKey: '_MODEL_NOVITA_API_KEY',      placeholder: ''          },
-      'Arcee AI':             { key: 'ARCEE_API_KEY',        modelKey: '_MODEL_ARCEE_API_KEY',       placeholder: ''          },
+      'Arcee AI':             { key: 'ARCEEAI_API_KEY',      modelKey: '_MODEL_ARCEEAI_API_KEY',     placeholder: ''          },
       'Step Plan':            { key: 'STEPFUN_API_KEY',      modelKey: '_MODEL_STEPFUN_API_KEY',     placeholder: ''          },
       'Vercel AI Gateway':    { key: 'AI_GATEWAY_API_KEY',   modelKey: '_MODEL_AI_GATEWAY_API_KEY',  placeholder: ''          },
       'Google AI Studio':     { key: 'GEMINI_API_KEY',         modelKey: '_MODEL_GEMINI_API_KEY',         placeholder: 'AIza...'   },
       'Fireworks AI':         { key: 'FIREWORKS_API_KEY',      modelKey: '_MODEL_FIREWORKS_API_KEY',      placeholder: 'fw_...'    },
+      'Anthropic (Claude)':   { key: 'ANTHROPIC_API_KEY',      modelKey: '_MODEL_ANTHROPIC_API_KEY',      placeholder: 'sk-ant-...' },
+      'xAI':                  { key: 'XAI_API_KEY',             modelKey: '_MODEL_XAI_API_KEY',             placeholder: 'xai-...', keyLabel: 'xAI API Key' },
+      'AWS Bedrock':          { key: 'AWS_ACCESS_KEY_ID',       modelKey: '_MODEL_AWS_ACCESS_KEY_ID',       placeholder: 'AKIA...', isBedrock: true, keyLabel: 'AWS Access Key ID' },
+      'GitHub Copilot':       { key: 'COPILOT_GITHUB_TOKEN',   modelKey: '_MODEL_COPILOT_GITHUB_TOKEN',   placeholder: 'ghp_... or gho_...', keyLabel: 'GitHub Token' },
+      'GMI Cloud':            { key: 'GMI_API_KEY',              modelKey: '_MODEL_GMI_API_KEY',              placeholder: '' },
+      'OpenCode Zen':         { key: 'OPENCODE_ZEN_API_KEY',    modelKey: '_MODEL_OPENCODE_ZEN_API_KEY',    placeholder: '' },
+      'OpenCode Go':          { key: 'OPENCODE_GO_API_KEY',     modelKey: '_MODEL_OPENCODE_GO_API_KEY',     placeholder: '' },
+      'Kilo Code':            { key: 'KILOCODE_API_KEY',         modelKey: '_MODEL_KILOCODE_API_KEY',         placeholder: '' },
+      'Ollama Cloud':         { key: 'OLLAMA_API_KEY',           modelKey: '_MODEL_OLLAMA_API_KEY',           placeholder: '' },
+      'Azure Foundry':        { key: 'AZURE_FOUNDRY_API_KEY',   modelKey: '_MODEL_AZURE_FOUNDRY_API_KEY',   placeholder: '', isAzure: true },
       'Custom Endpoint':      { key: 'CUSTOM_PROVIDER_API_KEY',modelKey: '_MODEL_CUSTOM_PROVIDER_API_KEY',placeholder: '',         isCustom: true },
       'xAI Grok (SuperGrok)': { key: null,                     modelKey: '_MODEL_XAI_OAUTH',              isOauth: 'xai' },
     },
@@ -1419,8 +1470,10 @@ function app() {
         } else if (p.isCustom && this.vars[p.key]) {
           const displayName = this.vars.CUSTOM_PROVIDER_NAME || this.vars.CUSTOM_PROVIDER_BASE_URL || 'Custom Endpoint';
           list.push({ providerKey: name, name: displayName, model: p.modelKey ? (this.vars[p.modelKey] || '') : '', key: p.key, isCustom: true });
-        } else if (p.key && !p.isCustom && this.vars[p.key]) {
-          list.push({ providerKey: name, name, model: p.modelKey ? (this.vars[p.modelKey] || '') : '', key: p.key, modelKey: p.modelKey || null });
+        } else if (p.isAzure && this.vars[p.key] && this.vars.AZURE_FOUNDRY_BASE_URL) {
+          list.push({ providerKey: name, name, model: p.modelKey ? (this.vars[p.modelKey] || '') : '', key: p.key, isAzure: true });
+        } else if (p.key && !p.isCustom && !p.isAzure && this.vars[p.key]) {
+          list.push({ providerKey: name, name, model: p.modelKey ? (this.vars[p.modelKey] || '') : '', key: p.key, modelKey: p.modelKey || null, isBedrock: !!p.isBedrock });
         }
       }
       return list;
@@ -1458,6 +1511,13 @@ function app() {
       if (p.isCustom) {
         this.vars.CUSTOM_PROVIDER_BASE_URL = '';
         this.vars.CUSTOM_PROVIDER_NAME     = '';
+      }
+      if (p.isBedrock) {
+        this.vars.AWS_SECRET_ACCESS_KEY = '';
+        this.vars.AWS_DEFAULT_REGION    = '';
+      }
+      if (p.isAzure) {
+        this.vars.AZURE_FOUNDRY_BASE_URL = '';
       }
       if (this.selectedProvider === providerKey) this.selectedProvider = '';
       try {

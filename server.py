@@ -92,12 +92,25 @@ ENV_VARS = [
     # OAuth-based providers (xAI Grok SuperGrok, Gemini CLI, Qwen OAuth, Claude Code)
     # are set up via the dashboard's Keys tab or HERMES_AUTH_JSON_BOOTSTRAP.
     ("NVIDIA_API_KEY",           "NVIDIA NIM",               "provider",  True),
-    ("ARCEE_API_KEY",            "Arcee AI",                 "provider",  True),
+    ("ARCEEAI_API_KEY",          "Arcee AI",                 "provider",  True),
     ("STEPFUN_API_KEY",          "Step Plan",                "provider",  True),
     ("AI_GATEWAY_API_KEY",       "Vercel AI Gateway",        "provider",  True),
     ("GEMINI_API_KEY",           "Google AI Studio",         "provider",  True),
     ("NOVITA_API_KEY",           "NovitaAI",                 "provider",  True),
     ("FIREWORKS_API_KEY",        "Fireworks AI",             "provider",  True),
+    ("ANTHROPIC_API_KEY",        "Anthropic (Claude)",       "provider",  True),
+    ("XAI_API_KEY",              "xAI",                      "provider",  True),
+    ("AWS_ACCESS_KEY_ID",        "AWS Access Key ID",        "provider",  True),
+    ("AWS_SECRET_ACCESS_KEY",    "AWS Secret Access Key",    "bedrock",   True),
+    ("AWS_DEFAULT_REGION",       "AWS Region",               "bedrock",   False),
+    ("COPILOT_GITHUB_TOKEN",     "GitHub Copilot",           "provider",  True),
+    ("GMI_API_KEY",              "GMI Cloud",                "provider",  True),
+    ("OPENCODE_ZEN_API_KEY",     "OpenCode Zen",             "provider",  True),
+    ("OPENCODE_GO_API_KEY",      "OpenCode Go",              "provider",  True),
+    ("KILOCODE_API_KEY",         "Kilo Code",                "provider",  True),
+    ("OLLAMA_API_KEY",           "Ollama Cloud",             "provider",  True),
+    ("AZURE_FOUNDRY_API_KEY",    "Azure Foundry key",        "provider",  True),
+    ("AZURE_FOUNDRY_BASE_URL",   "Azure Foundry URL",        "azure",     False),
     # Custom OpenAI-compatible endpoint — one slot; more via Hermes dashboard.
     # Only the API key is in category "provider" so PROVIDER_KEYS / is_config_complete
     # only trigger when an actual key is present, not just a base URL.
@@ -242,14 +255,17 @@ def write_config_yaml(data: dict[str, str]) -> None:
 
 def write_env(path: Path, data: dict[str, str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    cat_order = ["model", "provider", "tool",
+    cat_order = ["model", "provider", "bedrock", "azure", "custom", "tool",
                  "telegram", "discord", "slack", "whatsapp",
-                 "email", "mattermost", "matrix", "gateway"]
+                 "email", "mattermost", "matrix", "gateway", "admin"]
     cat_labels = {
-        "model": "Model", "provider": "Providers", "tool": "Tools",
+        "model": "Model", "provider": "Providers",
+        "bedrock": "AWS Bedrock", "azure": "Azure Foundry",
+        "custom": "Custom Endpoint", "tool": "Tools",
         "telegram": "Telegram", "discord": "Discord", "slack": "Slack",
         "whatsapp": "WhatsApp", "email": "Email",
         "mattermost": "Mattermost", "matrix": "Matrix", "gateway": "Gateway",
+        "admin": "Admin",
     }
     key_cat = {k: c for k, _, c, _ in ENV_VARS}
     grouped: dict[str, list[str]] = {c: [] for c in cat_order}
