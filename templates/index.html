@@ -828,7 +828,8 @@
             <label class="field-label" x-text="providerMap[selectedProvider]?.keyLabel || 'API Key'"></label>
             <input type="password"
                    :value="selectedProvider ? (vars[providerMap[selectedProvider]?.key]||'') : ''"
-                   @input="if(selectedProvider && providerMap[selectedProvider]?.key) vars[providerMap[selectedProvider].key]=$event.target.value"
+                   @input="if(selectedProvider && providerMap[selectedProvider]?.key) { vars[providerMap[selectedProvider].key]=$event.target.value; scheduleFetchModels(); }"
+                   @paste="$nextTick(() => scheduleFetchModels())"
                    :placeholder="selectedProvider ? (providerMap[selectedProvider]?.placeholder||'Paste your API key') : ''">
           </div>
 
@@ -874,19 +875,29 @@
           </template>
 
           <div class="field-gap" x-show="selectedProvider">
-            <label class="field-label">LLM Model</label>
-            <input type="text" :value="vars.LLM_MODEL||''" @input="vars.LLM_MODEL=$event.target.value"
-                   :placeholder="selectedProvider === 'xAI Grok (SuperGrok)' || selectedProvider === 'xAI' ? 'e.g. grok-4.3'
-                     : selectedProvider === 'Anthropic (Claude)' ? 'e.g. claude-sonnet-4-20250514'
-                     : selectedProvider === 'AWS Bedrock' ? 'e.g. anthropic.claude-3-5-sonnet-20241022-v2:0'
-                     : selectedProvider === 'Fireworks AI' ? 'e.g. accounts/fireworks/models/llama-v3p1-70b-instruct'
-                     : selectedProvider === 'Custom Endpoint' || selectedProvider === 'Azure Foundry' ? 'model-id as required by the endpoint'
-                     : 'e.g. openai/gpt-4o-mini  or  deepseek/deepseek-chat'">
-            <p class="hint" x-show="selectedProvider === 'xAI Grok (SuperGrok)' || selectedProvider === 'xAI'">e.g. <code>grok-4.3</code>, <code>grok-4.20-0309-reasoning</code></p>
-            <p class="hint" x-show="selectedProvider === 'Anthropic (Claude)'">e.g. <code>claude-sonnet-4-20250514</code>, <code>claude-opus-4-20250115</code></p>
-            <p class="hint" x-show="selectedProvider === 'AWS Bedrock'">e.g. <code>anthropic.claude-3-5-sonnet-20241022-v2:0</code>, <code>us.meta.llama3-2-90b-instruct-v1:0</code></p>
-            <p class="hint" x-show="selectedProvider === 'Fireworks AI'">Format: <code>accounts/fireworks/models/&lt;model-id&gt;</code></p>
-            <p class="hint" x-show="!['xAI Grok (SuperGrok)','xAI','Anthropic (Claude)','AWS Bedrock','Fireworks AI','Custom Endpoint','Azure Foundry'].includes(selectedProvider) && selectedProvider">Check your provider's docs for model names. OpenRouter format: <code>provider/model-name</code></p>
+            <label class="field-label" style="display:flex;align-items:center;gap:8px;">
+              LLM Model
+              <span x-show="modelsLoading" style="font-size:11px;color:var(--text-dim);font-weight:400;">
+                ⏳ fetching models…
+              </span>
+              <span x-show="!modelsLoading && modelsSource === 'live' && models.length" style="font-size:11px;color:var(--green);font-weight:400;">
+                ✓ <span x-text="models.length"></span> models loaded
+              </span>
+              <span x-show="!modelsLoading && modelsSource === 'fallback' && models.length" style="font-size:11px;color:var(--text-dim);font-weight:400;">
+                suggested models
+              </span>
+            </label>
+            <input type="text"
+                   list="model-datalist"
+                   :value="vars.LLM_MODEL||''"
+                   @input="vars.LLM_MODEL=$event.target.value"
+                   :placeholder="models.length ? 'Type or pick a model ↓' : (selectedProvider === 'xAI Grok (SuperGrok)' || selectedProvider === 'xAI' ? 'e.g. grok-4.3' : selectedProvider === 'Anthropic (Claude)' ? 'e.g. claude-sonnet-4-20250514' : selectedProvider === 'AWS Bedrock' ? 'e.g. anthropic.claude-3-5-sonnet-20241022-v2:0' : selectedProvider === 'Custom Endpoint' || selectedProvider === 'Azure Foundry' ? 'model-id as required by the endpoint' : 'e.g. openai/gpt-4o-mini')">
+            <datalist id="model-datalist">
+              <template x-for="m in models" :key="m">
+                <option :value="m"></option>
+              </template>
+            </datalist>
+            <p class="hint" x-show="!models.length && !modelsLoading">Paste your API key above — models will load automatically.</p>
           </div>
         </div>
 
@@ -1536,6 +1547,11 @@ function app() {
     // Distinct from isSetupDone, which tracks the in-memory form.
     savedConfigComplete: false,
 
+    models: [],
+    modelsLoading: false,
+    modelsSource: '',
+    _modelsFetchTimer: null,
+
     tools,
 
     providerMap: {
@@ -1610,6 +1626,31 @@ function app() {
       return this.configuredProviders.length > 0 && !!this.vars.LLM_MODEL;
     },
 
+    async fetchModels(envKey, apiKey) {
+      if (!envKey) { this.models = []; this.modelsSource = ''; return; }
+      this.modelsLoading = true;
+      try {
+        const params = new URLSearchParams({ env_key: envKey });
+        if (apiKey) params.set('api_key', apiKey);
+        const r = await fetch('/setup/api/models?' + params);
+        if (r.ok) {
+          const d = await r.json();
+          this.models = d.models || [];
+          this.modelsSource = d.source || '';
+        }
+      } catch(e) { this.models = []; }
+      finally { this.modelsLoading = false; }
+    },
+
+    scheduleFetchModels() {
+      const p = this.providerMap[this.selectedProvider];
+      if (!p || !p.key) return;
+      const envKey = p.key;
+      const apiKey = this.vars[envKey] || '';
+      clearTimeout(this._modelsFetchTimer);
+      this._modelsFetchTimer = setTimeout(() => this.fetchModels(envKey, apiKey), 700);
+    },
+
     onProviderChange() {
       const p = this.providerMap[this.selectedProvider];
       if (!p) return;
@@ -1623,6 +1664,9 @@ function app() {
         this.xai.verificationUri = '';
         this.xai.error = '';
       }
+      // Load models for the newly selected provider.
+      this.models = []; this.modelsSource = '';
+      this.scheduleFetchModels();
     },
 
     async removeProvider(providerKey) {

@@ -186,6 +186,75 @@ ENV_VARS = [
 
 SECRET_KEYS  = {k for k, _, _, s in ENV_VARS if s}
 PROVIDER_KEYS = [k for k, _, c, _ in ENV_VARS if c == "provider"]
+
+# ── Model catalogue ────────────────────────────────────────────────────────────
+# Providers with a live OpenAI-compatible GET /models endpoint.
+# Format: env_var_key → (models_url, auth_scheme)
+_MODELS_ENDPOINTS: dict[str, tuple[str, str]] = {
+    "OPENROUTER_API_KEY":       ("https://openrouter.ai/api/v1/models",               "Bearer"),
+    "XAI_API_KEY":              ("https://api.x.ai/v1/models",                        "Bearer"),
+    "DEEPSEEK_API_KEY":         ("https://api.deepseek.com/models",                   "Bearer"),
+    "NVIDIA_API_KEY":           ("https://integrate.api.nvidia.com/v1/models",        "Bearer"),
+    "ARCEEAI_API_KEY":          ("https://api.arcee.ai/api/v1/models",                "Bearer"),
+    "GMI_API_KEY":              ("https://api.gmi-serving.com/v1/models",             "Bearer"),
+    "NOVITA_API_KEY":           ("https://api.novita.ai/v3/openai/models",            "Bearer"),
+    "NOUS_API_KEY":             ("https://inference-api.nousresearch.com/v1/models",  "Bearer"),
+    "STEPFUN_API_KEY":          ("https://api.stepfun.com/v1/models",                 "Bearer"),
+    "ZAI_API_KEY":              ("https://open.bigmodel.cn/api/paas/v4/models",       "Bearer"),
+    "GLM_API_KEY":              ("https://open.bigmodel.cn/api/paas/v4/models",       "Bearer"),
+    "KILOCODE_API_KEY":         ("https://api.kilo.codes/v1/models",                  "Bearer"),
+    "OPENCODE_ZEN_API_KEY":     ("https://api.opencode.ai/v1/models",                 "Bearer"),
+    "OPENCODE_GO_API_KEY":      ("https://api.opencode.ai/v1/models",                 "Bearer"),
+}
+
+# Curated fallback lists for providers with no standard /models endpoint.
+_MODELS_FALLBACK: dict[str, list[str]] = {
+    "ANTHROPIC_API_KEY": [
+        "claude-opus-4-20250115", "claude-opus-4-5",
+        "claude-sonnet-4-20250514", "claude-sonnet-4-5",
+        "claude-haiku-4-20250115",
+        "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022",
+        "claude-3-opus-20240229", "claude-3-haiku-20240307",
+    ],
+    "GEMINI_API_KEY": [
+        "gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite-preview-06-17",
+        "gemini-2.0-flash", "gemini-2.0-flash-lite",
+        "gemini-1.5-pro", "gemini-1.5-flash",
+    ],
+    "COPILOT_GITHUB_TOKEN": [
+        "claude-sonnet-4-20250514", "claude-opus-4-5",
+        "gpt-4o", "gpt-4o-mini", "o3", "o4-mini",
+    ],
+    "HF_TOKEN": [
+        "meta-llama/Llama-3.3-70B-Instruct", "meta-llama/Llama-3.1-405B-Instruct",
+        "Qwen/Qwen2.5-72B-Instruct", "mistralai/Mistral-7B-Instruct-v0.3",
+        "microsoft/Phi-3.5-mini-instruct",
+    ],
+    "DASHSCOPE_API_KEY": [
+        "qwen-max", "qwen-max-latest", "qwen-plus", "qwen-plus-latest",
+        "qwen-turbo", "qwen-turbo-latest",
+        "qwen2.5-72b-instruct", "qwen2.5-coder-32b-instruct",
+    ],
+    "MINIMAX_API_KEY": ["MiniMax-Text-01", "abab6.5s-chat"],
+    "MINIMAX_CN_API_KEY": ["MiniMax-Text-01", "abab6.5s-chat"],
+    "KIMI_API_KEY": [
+        "moonshot-v1-auto", "moonshot-v1-8k", "moonshot-v1-32k", "moonshot-v1-128k",
+        "kimi-latest", "kimi-thinking-preview",
+    ],
+    "KIMI_CODING_API_KEY": ["kimi-latest", "kimi-thinking-preview"],
+    "ALIBABA_CODING_PLAN_API_KEY": [
+        "qwen-max", "qwen-plus", "qwen2.5-coder-32b-instruct",
+    ],
+    "XIAOMI_API_KEY": ["MiMo-7B-RL"],
+    "AWS_ACCESS_KEY_ID": [
+        "anthropic.claude-3-5-sonnet-20241022-v2:0",
+        "anthropic.claude-3-5-haiku-20241022-v1:0",
+        "anthropic.claude-3-opus-20240229-v1:0",
+        "us.meta.llama3-2-90b-instruct-v1:0",
+        "us.amazon.nova-pro-v1:0", "us.amazon.nova-lite-v1:0",
+        "mistral.mistral-large-2402-v1:0",
+    ],
+}
 CHANNEL_MAP  = {
     "Telegram":      "TELEGRAM_BOT_TOKEN",
     "Discord":       "DISCORD_BOT_TOKEN",
@@ -1130,6 +1199,54 @@ async def api_logs(request: Request):
     return JSONResponse({"lines": list(gw.logs)})
 
 
+async def api_models(request: Request):
+    """Fetch available models for a provider.
+
+    GET /setup/api/models?env_key=OPENROUTER_API_KEY&api_key=sk-or-...
+
+    Tries a live fetch from the provider's /models endpoint first.
+    Falls back to a curated list for providers without a standard endpoint.
+    Returns {"models": [...], "source": "live"|"fallback"|"none"}.
+    """
+    if err := guard(request): return err
+    env_key = request.query_params.get("env_key", "").strip()
+    api_key = request.query_params.get("api_key", "").strip()
+
+    if not env_key:
+        return JSONResponse({"error": "env_key required"}, status_code=400)
+
+    # Live fetch for providers with a standard OpenAI-compatible /models endpoint.
+    if api_key and env_key in _MODELS_ENDPOINTS:
+        url, auth_scheme = _MODELS_ENDPOINTS[env_key]
+        client = get_http_client()
+        try:
+            resp = await client.get(
+                url,
+                headers={
+                    "Authorization": f"{auth_scheme} {api_key}",
+                    "User-Agent": "atlas-admin/1.0",
+                    "Accept": "application/json",
+                },
+                timeout=httpx.Timeout(12.0, connect=5.0),
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                items = data.get("data", data) if isinstance(data, dict) else data
+                models = sorted(
+                    {item["id"] for item in items if isinstance(item, dict) and item.get("id")},
+                    key=str.lower,
+                )
+                if models:
+                    return JSONResponse({"models": models, "source": "live"})
+        except Exception as exc:
+            print(f"[models] live fetch failed for {env_key}: {exc!r}", flush=True)
+
+    # Curated fallback.
+    fallback = _MODELS_FALLBACK.get(env_key, [])
+    source = "fallback" if fallback else "none"
+    return JSONResponse({"models": fallback, "source": source})
+
+
 async def api_gw_start(request: Request):
     if err := guard(request): return err
     asyncio.create_task(gw.start())
@@ -1592,6 +1709,7 @@ routes = [
     Route("/setup/api/config",                  api_config_put,      methods=["PUT"]),
     Route("/setup/api/status",                  api_status),
     Route("/setup/api/logs",                    api_logs),
+    Route("/setup/api/models",                  api_models),
     Route("/setup/api/gateway/start",           api_gw_start,        methods=["POST"]),
     Route("/setup/api/gateway/stop",            api_gw_stop,         methods=["POST"]),
     Route("/setup/api/gateway/restart",         api_gw_restart,      methods=["POST"]),
