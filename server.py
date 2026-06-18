@@ -1,14 +1,14 @@
 """
-Hermes Agent — Railway admin server.
+Atlas Agent — Railway admin server.
 
 Responsibilities:
   - Admin UI / setup wizard at /setup (Starlette + Jinja, cookie-auth guarded)
   - Management API at /setup/api/* (config, status, logs, gateway, pairing)
-  - Reverse proxy at / and /* → native Hermes dashboard (hermes_cli/web_server, on 127.0.0.1:9119)
-  - Managed subprocesses: `hermes gateway` (agent) and `hermes dashboard` (native UI)
+  - Reverse proxy at / and /* → native Atlas dashboard (atlas_cli/web_server, on 127.0.0.1:9119)
+  - Managed subprocesses: `atlas gateway` (agent) and `atlas dashboard` (native UI)
   - Cookie-based session auth at /login (HMAC-signed, 7-day expiry, httponly)
 
-Auth model: Basic Auth was dropped in favor of cookies because the Hermes React
+Auth model: Basic Auth was dropped in favor of cookies because the Atlas React
 SPA's plain fetch() calls do not reliably include basic-auth creds across browsers,
 and basic-auth's per-directory protection space forced separate prompts for
 /setup and /. Cookies auto-include on every same-origin request, so both the
@@ -17,7 +17,7 @@ secret is regenerated on every process start, so any ADMIN_PASSWORD change on
 Railway (which triggers a redeploy) invalidates all existing sessions.
 
 First-visit behavior: if no provider+model config exists, GET / redirects to /setup.
-Once configured, / proxies to the Hermes dashboard. A small "← Setup" widget is
+Once configured, / proxies to the Atlas dashboard. A small "← Setup" widget is
 injected into every proxied HTML response so users can always return to the wizard.
 """
 
@@ -57,21 +57,21 @@ from starlette.websockets import WebSocket, WebSocketDisconnect, WebSocketState
 ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*m")
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
-HERMES_HOME = os.environ.get("HERMES_HOME", str(Path.home() / ".hermes"))
-ENV_FILE = Path(HERMES_HOME) / ".env"
-PAIRING_DIR = Path(HERMES_HOME) / "pairing"
+ATLAS_HOME = os.environ.get("ATLAS_HOME", str(Path.home() / ".atlas"))
+ENV_FILE = Path(ATLAS_HOME) / ".env"
+PAIRING_DIR = Path(ATLAS_HOME) / "pairing"
 PAIRING_TTL = 3600
 
-# Native Hermes dashboard — runs on loopback, fronted by our reverse proxy.
-HERMES_DASHBOARD_HOST = "127.0.0.1"
-HERMES_DASHBOARD_PORT = int(os.environ.get("HERMES_DASHBOARD_PORT", "9119"))
-HERMES_DASHBOARD_URL = f"http://{HERMES_DASHBOARD_HOST}:{HERMES_DASHBOARD_PORT}"
+# Native Atlas dashboard — runs on loopback, fronted by our reverse proxy.
+ATLAS_DASHBOARD_HOST = "127.0.0.1"
+ATLAS_DASHBOARD_PORT = int(os.environ.get("ATLAS_DASHBOARD_PORT", "9119"))
+ATLAS_DASHBOARD_URL = f"http://{ATLAS_DASHBOARD_HOST}:{ATLAS_DASHBOARD_PORT}"
 
 # Mirror dashboard-ref-only/auth_proxy.py: strip only `host` (httpx sets it)
 # and `transfer-encoding` (httpx recomputes it from the body). Keep everything
 # else — notably `authorization`, because the SPA uses Bearer tokens against
-# hermes's own /api/env/reveal and OAuth endpoints, and keep `cookie` since
-# some hermes endpoints read it. Aggressive stripping was masking requests in
+# atlas's own /api/env/reveal and OAuth endpoints, and keep `cookie` since
+# some atlas endpoints read it. Aggressive stripping was masking requests in
 # ways that produced spurious 401s.
 HOP_BY_HOP = {"host", "transfer-encoding"}
 
@@ -94,10 +94,10 @@ ENV_VARS = [
     ("KIMI_API_KEY",             "Kimi",                     "provider",  True),
     ("MINIMAX_API_KEY",          "MiniMax",                  "provider",  True),
     ("HF_TOKEN",                 "Hugging Face",             "provider",  True),
-    # Added in v2026.4.23+ (hermes v0.11.0+). All plain API-key auth — hermes
+    # Added in v2026.4.23+ (atlas v0.16.0+). All plain API-key auth — atlas
     # auto-routes by env-var presence, no extra config needed on our side.
     # OAuth-based providers (xAI Grok SuperGrok, Gemini CLI, Qwen OAuth, Claude Code)
-    # are set up via the dashboard's Keys tab or HERMES_AUTH_JSON_BOOTSTRAP.
+    # are set up via the dashboard's Keys tab or ATLAS_AUTH_JSON_BOOTSTRAP.
     ("NVIDIA_API_KEY",           "NVIDIA NIM",               "provider",  True),
     ("ARCEEAI_API_KEY",          "Arcee AI",                 "provider",  True),
     ("STEPFUN_API_KEY",          "Step Plan",                "provider",  True),
@@ -117,7 +117,7 @@ ENV_VARS = [
     ("OLLAMA_API_KEY",           "Ollama Cloud",             "provider",  True),
     ("AZURE_FOUNDRY_API_KEY",    "Azure Foundry key",        "provider",  True),
     ("AZURE_FOUNDRY_BASE_URL",   "Azure Foundry URL",        "azure",     False),
-    # Custom OpenAI-compatible endpoint — one slot; more via Hermes dashboard.
+    # Custom OpenAI-compatible endpoint — one slot; more via Atlas dashboard.
     # Only the API key is in category "provider" so PROVIDER_KEYS / is_config_complete
     # only trigger when an actual key is present, not just a base URL.
     ("CUSTOM_PROVIDER_API_KEY",  "Custom Provider key",      "provider",  True),
@@ -186,11 +186,11 @@ def read_env(path: Path) -> dict[str, str]:
 def write_config_yaml(data: dict[str, str]) -> None:
     """Write config.yaml — deep-merge template defaults with any existing user/cron-managed sections.
 
-    Previously this overwrote ``$HERMES_HOME/config.yaml`` with a hardcoded template
+    Previously this overwrote ``$ATLAS_HOME/config.yaml`` with a hardcoded template
     body on every boot, silently erasing user-managed top-level keys. The most
-    common casualty is ``mcp_servers`` — Hermes reads downstream MCP servers
-    *only* from this file (see ``hermes_cli/mcp_config.py:_get_mcp_servers``), so
-    the wipe broke ``hermes mcp add/test/list`` state across every container
+    common casualty is ``mcp_servers`` — Atlas reads downstream MCP servers
+    *only* from this file (see ``atlas_cli/mcp_config.py:_get_mcp_servers``), so
+    the wipe broke ``atlas mcp add/test/list`` state across every container
     restart and required hand-restoration after each redeploy.
 
     The fix: load the existing file if any, apply the deployment-managed keys
@@ -198,10 +198,10 @@ def write_config_yaml(data: dict[str, str]) -> None:
     on top, and write the merged result. Unknown top-level keys (``mcp_servers``,
     custom skill config, etc.) are preserved verbatim.
     """
-    import yaml  # hermes-agent already pulls pyyaml; deferred import keeps cold start light
+    import yaml  # atlas-agent already pulls pyyaml; deferred import keeps cold start light
 
     model = data.get("LLM_MODEL", "")
-    config_path = Path(HERMES_HOME) / "config.yaml"
+    config_path = Path(ATLAS_HOME) / "config.yaml"
     config_path.parent.mkdir(parents=True, exist_ok=True)
 
     existing: dict = {}
@@ -238,14 +238,14 @@ def write_config_yaml(data: dict[str, str]) -> None:
     merged_agent.setdefault("max_iterations", 50)
     merged["agent"] = merged_agent
 
-    merged["data_dir"] = HERMES_HOME
+    merged["data_dir"] = ATLAS_HOME
 
     # Custom OpenAI-compatible endpoint — write custom_providers block when configured,
     # remove it when not (safe on Railway where users don't hand-edit config.yaml).
     custom_base_url = data.get("CUSTOM_PROVIDER_BASE_URL", "").strip()
     if custom_base_url:
         raw_name = data.get("CUSTOM_PROVIDER_NAME", "").strip() or custom_base_url
-        # Sanitise to a valid hermes provider name (lowercase alphanumeric + hyphens).
+        # Sanitise to a valid atlas provider name (lowercase alphanumeric + hyphens).
         sanitized_name = re.sub(r"[^a-z0-9-]", "-", raw_name.lower()).strip("-") or "custom"
         merged["custom_providers"] = [{
             "name": sanitized_name,
@@ -301,7 +301,7 @@ def write_env(path: Path, data: dict[str, str]) -> None:
 # ── xAI Grok SuperGrok OAuth (Device Code — RFC 8628) ───────────────────────
 # xAI's OIDC discovery at https://auth.x.ai/.well-known/openid-configuration
 # declares device_authorization_endpoint, so Device Code flow works without
-# any redirect URL. The client_id matches hermes's own Grok CLI credential.
+# any redirect URL. The client_id matches atlas's own Grok CLI credential.
 _XAI_CLIENT_ID   = "b1a00492-073a-47ea-816f-4c329264a828"
 _XAI_SCOPE       = "openid profile email offline_access grok-cli:access api:access"
 _XAI_DEVICE_URL  = "https://auth.x.ai/oauth2/device/code"
@@ -313,7 +313,7 @@ _xai_oauth_state: dict | None = None  # one auth at a time (single-user deployme
 
 def _has_xai_oauth_tokens() -> bool:
     """True when auth.json contains a valid xAI OAuth refresh token."""
-    auth_path = Path(HERMES_HOME) / "auth.json"
+    auth_path = Path(ATLAS_HOME) / "auth.json"
     if not auth_path.exists():
         return False
     try:
@@ -325,8 +325,8 @@ def _has_xai_oauth_tokens() -> bool:
 
 
 def _save_xai_auth_json(tokens: dict) -> None:
-    """Write xAI OAuth tokens to auth.json in hermes's expected format."""
-    auth_path = Path(HERMES_HOME) / "auth.json"
+    """Write xAI OAuth tokens to auth.json in atlas's expected format."""
+    auth_path = Path(ATLAS_HOME) / "auth.json"
     existing: dict = {}
     if auth_path.exists():
         try:
@@ -361,7 +361,7 @@ def _save_xai_auth_json(tokens: dict) -> None:
 def _apply_xai_oauth_config(model: str) -> None:
     """Write config.yaml with provider=xai-oauth and the chosen model."""
     import yaml
-    config_path = Path(HERMES_HOME) / "config.yaml"
+    config_path = Path(ATLAS_HOME) / "config.yaml"
     config_path.parent.mkdir(parents=True, exist_ok=True)
     existing: dict = {}
     if config_path.exists():
@@ -389,7 +389,7 @@ def _apply_xai_oauth_config(model: str) -> None:
     merged_agent = dict(merged.get("agent") if isinstance(merged.get("agent"), dict) else {})
     merged_agent.setdefault("max_iterations", 50)
     merged["agent"] = merged_agent
-    merged["data_dir"] = HERMES_HOME
+    merged["data_dir"] = ATLAS_HOME
 
     with config_path.open("w") as f:
         yaml.safe_dump(merged, f, sort_keys=False, default_flow_style=False)
@@ -461,7 +461,7 @@ async def api_oauth_xai_delete(request: Request) -> Response:
     global _xai_oauth_state
     if err := guard(request):
         return err
-    auth_path = Path(HERMES_HOME) / "auth.json"
+    auth_path = Path(ATLAS_HOME) / "auth.json"
     if auth_path.exists():
         try:
             data = json.loads(auth_path.read_text(encoding="utf-8"))
@@ -574,10 +574,10 @@ def unmask(new: dict[str, str], existing: dict[str, str]) -> dict[str, str]:
 #   1. Basic auth's per-directory protection space means browsers cache creds
 #      for /setup/* separately from /*, forcing re-prompt on navigation.
 #   2. Browser behavior for sending Basic auth on XHR/fetch is inconsistent;
-#      the Hermes React SPA's plain fetch() calls don't reliably include it,
+#      the Atlas React SPA's plain fetch() calls don't reliably include it,
 #      causing every proxied API call to 401.
 # Cookies are auto-included on every same-origin request (navigation + XHR)
-# so both the setup UI and the proxied Hermes dashboard work with one login.
+# so both the setup UI and the proxied Atlas dashboard work with one login.
 #
 # The SECRET is regenerated on every process start. That means any ADMIN_PASSWORD
 # change via Railway → redeploy → all existing cookies invalidate → users re-login.
@@ -585,7 +585,7 @@ import hashlib as _hashlib
 import hmac as _hmac
 from urllib.parse import quote as _url_quote, urlparse as _urlparse
 
-COOKIE_NAME = "hermes_auth"
+COOKIE_NAME = "atlas_auth"
 COOKIE_MAX_AGE = 7 * 86400  # 7 days
 COOKIE_SECRET = secrets.token_bytes(32)
 
@@ -647,7 +647,7 @@ def guard(request: Request) -> Response | None:
 LOGIN_PAGE_HTML = """<!DOCTYPE html>
 <html lang="en"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Hermes Agent — Sign in</title>
+<title>Atlas Agent — Sign in</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
@@ -677,7 +677,7 @@ button:hover{background:#7b8fff;border-color:#7b8fff}
 <body>
 <div class="card">
   <div class="brand">
-    <div class="brand-logo">hermes<span>/admin</span></div>
+    <div class="brand-logo">atlas<span>/admin</span></div>
     <div class="brand-sub">Sign in to continue</div>
   </div>
   __ERROR__
@@ -745,7 +745,7 @@ async def logout(request: Request) -> Response:
 
 # ── Gateway manager ───────────────────────────────────────────────────────────
 # Auto-respawn tuning. When the gateway exits without us asking it to — an
-# in-band `/restart` (inside a container hermes exits 75 expecting a supervisor
+# in-band `/restart` (inside a container atlas exits 75 expecting a supervisor
 # to bring it back; verified it takes the exit-75 path, NOT a detached
 # self-restart, when /run/.containerenv or /.dockerenv exists), a crash, or an
 # OOM kill — server.py is that supervisor and must restart it. Nothing else
@@ -784,17 +784,17 @@ class Gateway:
         self._stopping = False
         try:
             # .env values take priority over Railway env vars.
-            # We build the env this way so hermes's own dotenv loading
+            # We build the env this way so atlas's own dotenv loading
             # (which reads the same file) doesn't shadow our values.
-            env = {**os.environ, "HERMES_HOME": HERMES_HOME}
+            env = {**os.environ, "ATLAS_HOME": ATLAS_HOME}
             env.update(read_env(ENV_FILE))
             model = env.get("LLM_MODEL", "")
             provider_key = next((env.get(k, "") for k in PROVIDER_KEYS if env.get(k)), "")
             print(f"[gateway] model={model or '⚠ NOT SET'} | provider_key={'set' if provider_key else '⚠ NOT SET'}", flush=True)
-            # Write config.yaml so hermes picks up the model (env vars alone aren't always enough)
+            # Write config.yaml so atlas picks up the model (env vars alone aren't always enough)
             write_config_yaml(read_env(ENV_FILE))
             self.proc = await asyncio.create_subprocess_exec(
-                "hermes", "gateway",
+                "atlas", "gateway",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
                 env=env,
@@ -872,7 +872,7 @@ class Gateway:
             self.state = "stopped"
             self.logs.append("[gateway] restart skipped — provider/model not configured")
             return
-        # Clear a pid file left stale by a hard crash (SIGKILL/OOM skips hermes'
+        # Clear a pid file left stale by a hard crash (SIGKILL/OOM skips atlas'
         # atexit cleanup) so the respawn's own O_EXCL pid claim can't bail with
         # "PID file race lost". Scoped to the pid we just buried — never disturbs
         # a live gateway's lock.
@@ -883,7 +883,7 @@ class Gateway:
     def _clear_stale_pidfile(self, dead_pid: int | None) -> None:
         if dead_pid is None:
             return
-        pid_file = Path(HERMES_HOME) / "gateway.pid"
+        pid_file = Path(ATLAS_HOME) / "gateway.pid"
         try:
             rec = json.loads(pid_file.read_text())
         except Exception:
@@ -909,9 +909,9 @@ gw = Gateway()
 cfg_lock = asyncio.Lock()
 
 
-# ── Hermes dashboard subprocess ───────────────────────────────────────────────
+# ── Atlas dashboard subprocess ───────────────────────────────────────────────
 class Dashboard:
-    """Manages the `hermes dashboard` subprocess (native Hermes web UI).
+    """Manages the `atlas dashboard` subprocess (native Atlas web UI).
 
     Bound to loopback only — we expose it to the public internet through our
     reverse proxy on $PORT, where edge basic auth guards every request.
@@ -933,26 +933,26 @@ class Dashboard:
             return
         try:
             self.proc = await asyncio.create_subprocess_exec(
-                "hermes", "dashboard",
-                "--host", HERMES_DASHBOARD_HOST,
-                "--port", str(HERMES_DASHBOARD_PORT),
+                "atlas", "dashboard",
+                "--host", ATLAS_DASHBOARD_HOST,
+                "--port", str(ATLAS_DASHBOARD_PORT),
                 "--no-open",
                 # --skip-build: the Dockerfile pre-builds the React dashboard
-                # into hermes_cli/web_dist/ at image time. This flag tells
-                # hermes to trust that dist and skip its npm build check,
-                # which would otherwise add ~30s to first startup (hermes >= v2026.5.16).
+                # into atlas_cli/web_dist/ at image time. This flag tells
+                # atlas to trust that dist and skip its npm build check,
+                # which would otherwise add ~30s to first startup (atlas >= v0.16.0).
                 "--skip-build",
                 # NOTE: the embedded Chat tab (/api/pty + /api/ws + /api/events)
-                # is unconditionally enabled as of hermes v2026.6.5 — the old
+                # is unconditionally enabled as of atlas v0.16.0 — the old
                 # `--tui` flag was REMOVED from the dashboard subcommand. Passing
                 # it now aborts startup with "unrecognized arguments: --tui",
                 # which kills this subprocess and 503s the reverse proxy. The
-                # Dockerfile still pre-builds ui-tui/dist/ (via HERMES_TUI_DIR)
+                # Dockerfile still pre-builds ui-tui/dist/ (via ATLAS_TUI_DIR)
                 # so the PTY child spawns instantly on first chat connect.
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
             )
-            print(f"[dashboard] spawned pid={self.proc.pid} → {HERMES_DASHBOARD_URL}", flush=True)
+            print(f"[dashboard] spawned pid={self.proc.pid} → {ATLAS_DASHBOARD_URL}", flush=True)
             self._drain_task = asyncio.create_task(self._drain())
         except Exception as e:
             print(f"[dashboard] FAILED to spawn: {e!r}", flush=True)
@@ -1093,7 +1093,7 @@ async def api_config_reset(request: Request):
 
 
 # ── Pairing ───────────────────────────────────────────────────────────────────
-# Pending-request file format (hermes >= v0.15 / v2026.5.29.x, gateway/pairing.py):
+# Pending-request file format (atlas >= v0.15 / v2026.5.29.x, gateway/pairing.py):
 # each `{platform}-pending.json` entry is keyed by a random opaque `entry_id`
 # (secrets.token_hex), and the user-facing pairing code is stored only as a
 # salted hash ({hash, salt, user_id, user_name, created_at}) — the plaintext
@@ -1198,7 +1198,7 @@ async def api_pairing_revoke(request: Request):
     return JSONResponse({"ok": True})
 
 
-# ── Reverse proxy → Hermes dashboard ──────────────────────────────────────────
+# ── Reverse proxy → Atlas dashboard ──────────────────────────────────────────
 _WIDGET_LINK_STYLE = (
     "background:rgba(20,24,31,0.92);backdrop-filter:blur(8px);"
     "border:1px solid #252d3d;border-radius:6px;padding:6px 12px;"
@@ -1206,7 +1206,7 @@ _WIDGET_LINK_STYLE = (
     "align-items:center;gap:6px;"
 )
 BACK_TO_SETUP_WIDGET = (
-    '<div id="hermes-back-widget" style="position:fixed;bottom:14px;right:14px;'
+    '<div id="atlas-back-widget" style="position:fixed;bottom:14px;right:14px;'
     'z-index:99999;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;'
     'font-size:11px;display:flex;gap:8px;">'
     f'<a href="/setup" style="{_WIDGET_LINK_STYLE}">← Setup</a>'
@@ -1226,24 +1226,24 @@ a{color:#6272ff;text-decoration:none;border:1px solid #252d3d;border-radius:6px;
 padding:7px 14px;font-size:12px;display:inline-block}
 a:hover{border-color:#6272ff}</style></head>
 <body><div class="card">
-<h1>⚠ Hermes dashboard unavailable</h1>
-<p>The native Hermes dashboard is not responding on port %d.<br>
+<h1>⚠ Atlas dashboard unavailable</h1>
+<p>The native Atlas dashboard is not responding on port %d.<br>
 It may still be starting up, or it may have crashed.</p>
 <p>Try refreshing in a few seconds, or head back to setup.</p>
 <a href="/setup">← Back to Setup</a>
 </div>
 <script>setTimeout(()=>location.reload(),4000);</script>
-</body></html>""" % HERMES_DASHBOARD_PORT
+</body></html>""" % ATLAS_DASHBOARD_PORT
 
 
 async def _proxy_to_dashboard(request: Request) -> Response:
-    """Forward an authenticated request to the Hermes dashboard subprocess.
+    """Forward an authenticated request to the Atlas dashboard subprocess.
 
     Assumes edge auth (basic auth middleware) has already validated the caller.
-    HTTP-only: the native Hermes dashboard does not use WebSockets.
+    HTTP-only: the native Atlas dashboard does not use WebSockets.
     """
     client = get_http_client()
-    target = f"{HERMES_DASHBOARD_URL}{request.url.path}"
+    target = f"{ATLAS_DASHBOARD_URL}{request.url.path}"
     if request.url.query:
         target = f"{target}?{request.url.query}"
 
@@ -1266,7 +1266,7 @@ async def _proxy_to_dashboard(request: Request) -> Response:
         print(f"[proxy] upstream error for {request.method} {request.url.path}: {e}", flush=True)
         return HTMLResponse(DASHBOARD_UNAVAILABLE_HTML, status_code=502)
 
-    # Surface non-2xx responses from hermes into Railway logs so we can
+    # Surface non-2xx responses from atlas into Railway logs so we can
     # diagnose 401/500s without needing browser DevTools access.
     if upstream.status_code >= 400:
         body_snip = upstream.content[:200].decode("utf-8", errors="replace")
@@ -1321,7 +1321,7 @@ async def route_root(request: Request) -> Response:
 
 
 async def route_proxy(request: Request) -> Response:
-    """Catch-all: forward any unmatched path to the Hermes dashboard."""
+    """Catch-all: forward any unmatched path to the Atlas dashboard."""
     if err := guard(request): return err
     return await _proxy_to_dashboard(request)
 
@@ -1361,7 +1361,7 @@ async def lifespan(app):
 
 
 # ── WebSocket reverse proxy ──────────────────────────────────────────────────
-# The hermes dashboard exposes several WebSocket endpoints when started with
+# The atlas dashboard exposes several WebSocket endpoints when started with
 # --tui. The browser SPA opens these and they must flow through our reverse
 # proxy. /api/pub is opened only by the PTY child against loopback and is
 # intentionally NOT proxied — exposing it would let an authed user spam events
@@ -1371,7 +1371,7 @@ async def lifespan(app):
 #   /api/pty                  binary stream — embedded TUI keystrokes/output
 #   /api/ws                   JSON-RPC      — gateway sidecar driving Chat metadata
 #   /api/events               text frames   — dashboard subscriber for /api/pub fan-out
-#   /api/plugins/<name>/...   plugin-contributed sockets. Mounted by hermes
+#   /api/plugins/<name>/...   plugin-contributed sockets. Mounted by atlas
 #                             under /api/plugins/<name>/ (web_server.
 #                             _mount_plugin_api_routes), e.g. kanban's
 #                             /api/plugins/kanban/events live task feed. Added
@@ -1381,7 +1381,7 @@ async def lifespan(app):
 # Auth model (matches the HTTP proxy):
 #   * Edge: our HMAC cookie via _is_authenticated. WebSocket inherits .cookies
 #     from starlette HTTPConnection so the same helper works unchanged.
-#   * Upstream: hermes's own ?token=<_SESSION_TOKEN> query param. The SPA
+#   * Upstream: atlas's own ?token=<_SESSION_TOKEN> query param. The SPA
 #     fetches that token via /api/auth/session-token and includes it in the
 #     WS URL, so we just forward path + query verbatim.
 PROXIED_WS_PATHS = ("/api/pty", "/api/ws", "/api/events", "/api/plugins/*")
@@ -1433,9 +1433,9 @@ async def _ws_pump_upstream_to_client(
 
 
 async def ws_proxy(websocket: WebSocket) -> None:
-    """Reverse-proxy a single WebSocket from browser → hermes dashboard.
+    """Reverse-proxy a single WebSocket from browser → atlas dashboard.
 
-    Order matters: connect upstream BEFORE accepting the client. If hermes
+    Order matters: connect upstream BEFORE accepting the client. If atlas
     is wedged or rejects the upgrade, we close the client with a meaningful
     code instead of accepting and then dropping silently.
 
@@ -1455,10 +1455,10 @@ async def ws_proxy(websocket: WebSocket) -> None:
         return
 
     # 2. Build upstream URL preserving the SPA's path + query (the query
-    #    contains the hermes session token + channel id).
+    #    contains the atlas session token + channel id).
     path = websocket.url.path
     qs = websocket.url.query
-    upstream_url = f"ws://{HERMES_DASHBOARD_HOST}:{HERMES_DASHBOARD_PORT}{path}"
+    upstream_url = f"ws://{ATLAS_DASHBOARD_HOST}:{ATLAS_DASHBOARD_PORT}{path}"
     if qs:
         upstream_url = f"{upstream_url}?{qs}"
 
@@ -1466,12 +1466,12 @@ async def ws_proxy(websocket: WebSocket) -> None:
         upstream = await websockets.connect(
             upstream_url,
             open_timeout=5,
-            # Don't forward client cookies/headers — hermes WS auth is
+            # Don't forward client cookies/headers — atlas WS auth is
             # purely token-based via the URL, and forwarding random
             # headers risks future upstream surprises.
         )
     except (asyncio.TimeoutError, OSError, websockets.exceptions.WebSocketException) as e:
-        # Hermes dashboard down, restarting, or rejected the upgrade
+        # Atlas dashboard down, restarting, or rejected the upgrade
         # (e.g. bad/missing session token).
         print(f"[ws-proxy] upstream connect failed for {path}: {e!r}", flush=True)
         # 1011 = internal error; client SPA will surface a generic close.
@@ -1542,7 +1542,7 @@ routes = [
     # /setup/* typos return a real 404 — not a silent proxy fallthrough.
     Route("/setup/{path:path}",                 route_setup_404,     methods=ANY_METHOD),
 
-    # Reverse-proxy hermes's dashboard WebSockets (Chat tab + sidecar).
+    # Reverse-proxy atlas's dashboard WebSockets (Chat tab + sidecar).
     # WebSocketRoute is matched independently of HTTP routes, so order
     # relative to the catch-all HTTP `Route("/{path:path}", ...)` below
     # doesn't matter — but listing them as a group keeps the surface
@@ -1552,15 +1552,15 @@ routes = [
     WebSocketRoute("/api/pty",                  ws_proxy),
     WebSocketRoute("/api/ws",                   ws_proxy),
     WebSocketRoute("/api/events",               ws_proxy),
-    # Plugin-contributed sockets, mounted by hermes under /api/plugins/<name>/
+    # Plugin-contributed sockets, mounted by atlas under /api/plugins/<name>/
     # (e.g. kanban's /api/plugins/kanban/events). Prefix-matched so new plugin
-    # WS endpoints in future hermes releases proxy without re-touching this list.
+    # WS endpoints in future atlas releases proxy without re-touching this list.
     WebSocketRoute("/api/plugins/{path:path}",  ws_proxy),
 
     # Root: redirect to /setup if unconfigured, otherwise proxy the dashboard.
     Route("/",                                  route_root,          methods=ANY_METHOD),
 
-    # Catch-all: everything else proxies to the Hermes dashboard subprocess.
+    # Catch-all: everything else proxies to the Atlas dashboard subprocess.
     Route("/{path:path}",                       route_proxy,         methods=ANY_METHOD),
 ]
 

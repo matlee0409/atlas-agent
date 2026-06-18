@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Hermes Agent</title>
+<title>Atlas Agent</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -163,7 +163,7 @@
   .nav-item.danger { color: var(--red); }
   .nav-item.danger:hover { color: var(--red); background: rgba(248,81,73,0.08); border-left-color: var(--red); }
 
-  /* Dashboard is a *link out* to the native hermes UI, not a tab in this
+  /*/* Dashboard is a *link out* to the native atlas UI, not a tab in this
      wrapper. Style it as a pill/CTA so it reads differently from the
      "active tab" indicator (which uses a left border + surface2 bg). */
   .nav-item.highlight {
@@ -685,19 +685,18 @@
 
 <!-- Header -->
 <div id="header">
-  <img src="https://pbs.twimg.com/profile_images/1816254738234761216/TX7TW-Mp_400x400.jpg"
-       alt="Hermes" style="width:28px;height:28px;border-radius:6px;flex-shrink:0;">
-  <div class="logo">hermes<span>/admin</span></div>
+  <img src="https://avatars.githubusercontent.com/u/matlee0409" onerror="this.style.display='none'"
+       alt="Atlas" style="width:28px;height:28px;border-radius:6px;flex-shrink:0;">
+  <div class="logo">atlas<span>/admin</span></div>
   <div class="status-dot" :class="gw.state||'stopped'"></div>
   <div id="status-label" x-text="gw.state||'stopped'"></div>
   <div class="header-spacer"></div>
   <div class="header-branding">
-    <span>made with ♥ by</span>
-    <img src="https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/heimdall-light.svg" alt="Heimdall">
-    <a href="https://github.com/praveen-ks-2001" target="_blank" rel="noopener">Heimdall</a>
+    <span>by</span>
+    <a href="https://github.com/matlee0409" target="_blank" rel="noopener">matlee0409</a>
   </div>
   <div class="header-spacer"></div>
-  <a class="header-issue-link" href="https://github.com/praveen-ks-2001/hermes-agent-template/issues" target="_blank" rel="noopener">⚠ Report issue</a>
+  <a class="header-issue-link" href="https://github.com/matlee0409/atlas/issues" target="_blank" rel="noopener">⚠ Report issue</a>
   <button class="header-btn" @click="restartGateway()">↺ Restart</button>
 </div>
 
@@ -716,9 +715,9 @@
     <div class="nav-group-label" style="margin-top:8px">Dashboard</div>
     <div class="nav-item highlight"
          @click="window.location.href='/?force=1'"
-         title="Open the native Hermes dashboard — providers, skills, analytics, sessions">
+         title="Open the native Atlas dashboard — providers, skills, analytics, sessions">
       <span class="nav-icon">⬢</span>
-      <span>Hermes Dashboard</span>
+      <span>Atlas Dashboard</span>
       <span class="nav-arrow">→</span>
     </div>
 
@@ -776,12 +775,12 @@
     <div class="panel" :class="{active: page==='setup'}">
       <div class="panel-header">
         <div class="panel-title">Setup</div>
-        <div class="panel-subtitle">Configure your Hermes Agent</div>
+        <div class="panel-subtitle">Configure your Atlas Agent</div>
       </div>
       <div class="panel-body">
 
         <div style="background:rgba(98,114,255,0.06);border:1px solid rgba(98,114,255,0.2);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:13px;color:var(--text-dim);">
-          New to Hermes? Head over to the <a href="#" @click.prevent="page='guide'" style="color:var(--accent2);text-decoration:none;font-weight:500;">How to Setup</a> section for a step-by-step guide on getting started.
+          New to Atlas? Head over to the <a href="#" @click.prevent="page='guide'" style="color:var(--accent2);text-decoration:none;font-weight:500;">How to Setup</a> section for a step-by-step guide on getting started.
         </div>
 
         <!-- LLM Provider -->
@@ -794,8 +793,8 @@
             Select a provider, paste its key and enter a model, then click <strong>Save &amp; Start</strong>.
             You can add multiple providers — each saves alongside the others.
             Configured providers appear in the list below with a Remove button.
-            Every provider Hermes supports is also manageable from the
-            <a href="/?force=1" style="color:var(--accent2);text-decoration:none;font-weight:500;">Hermes Dashboard</a>
+            Every provider Atlas supports is also manageable from the
+            <a href="/?force=1" style="color:var(--accent2);text-decoration:none;font-weight:500;">Atlas Dashboard</a>
             &rarr; <strong>Keys</strong> tab.
           </p>
           <div>
@@ -820,7 +819,7 @@
                 <label class="field-label">Base URL</label>
                 <input type="text" :value="vars.CUSTOM_PROVIDER_BASE_URL||''" @input="vars.CUSTOM_PROVIDER_BASE_URL=$event.target.value"
                        placeholder="https://api.groq.com/openai/v1">
-                <p class="hint">Any OpenAI-compatible endpoint. For more providers configure additional ones from the <a href="/?force=1" style="color:var(--accent2);">Hermes Dashboard</a> → Keys tab.</p>
+                <p class="hint">Any OpenAI-compatible endpoint. For more providers configure additional ones from the <a href="/?force=1" style="color:var(--accent2);">Atlas Dashboard</a> → Keys tab.</p>
               </div>
             </div>
           </template>
@@ -1028,7 +1027,7 @@
           </div>
           <div class="toggle-body" x-show="channelsEnabled.email">
             <div class="field-grid-2">
-              <div><label class="field-label">Address</label><input type="text" :value="vars.EMAIL_ADDRESS||''" @input="vars.EMAIL_ADDRESS=$event.target.value" placeholder="hermes@gmail.com"></div>
+              <div><label class="field-label">Address</label><input type="text" :value="vars.EMAIL_ADDRESS||''" @input="vars.EMAIL_ADDRESS=$event.target.value" placeholder="atlas@gmail.com"></div>
               <div><label class="field-label">Password</label><input type="password" :value="vars.EMAIL_PASSWORD||''" @input="vars.EMAIL_PASSWORD=$event.target.value"></div>
               <div><label class="field-label">IMAP Host</label><input type="text" :value="vars.EMAIL_IMAP_HOST||''" @input="vars.EMAIL_IMAP_HOST=$event.target.value" placeholder="imap.gmail.com"></div>
               <div><label class="field-label">SMTP Host</label><input type="text" :value="vars.EMAIL_SMTP_HOST||''" @input="vars.EMAIL_SMTP_HOST=$event.target.value" placeholder="smtp.gmail.com"></div>
@@ -1058,7 +1057,7 @@
             <div class="field-grid-2">
               <div><label class="field-label">Homeserver URL</label><input type="text" :value="vars.MATRIX_HOMESERVER||''" @input="vars.MATRIX_HOMESERVER=$event.target.value" placeholder="https://matrix.example.org"></div>
               <div><label class="field-label">Access Token</label><input type="password" :value="vars.MATRIX_ACCESS_TOKEN||''" @input="vars.MATRIX_ACCESS_TOKEN=$event.target.value"></div>
-              <div><label class="field-label">User ID</label><input type="text" :value="vars.MATRIX_USER_ID||''" @input="vars.MATRIX_USER_ID=$event.target.value" placeholder="@hermes:example.org"></div>
+              <div><label class="field-label">User ID</label><input type="text" :value="vars.MATRIX_USER_ID||''" @input="vars.MATRIX_USER_ID=$event.target.value" placeholder="@atlas:example.org"></div>
             </div>
           </div>
 
@@ -1118,7 +1117,7 @@
         <div style="display:flex;gap:10px;align-items:center;">
           <button class="btn"
                   @click="window.location.href='/?force=1'"
-                  title="Open the native Hermes dashboard — browse all providers, skills, and analytics">
+                  title="Open the native Atlas dashboard — browse all providers, skills, and analytics">
             Open Dashboard →
           </button>
           <button class="btn primary" @click="saveConfig()" :disabled="saving">
@@ -1270,7 +1269,7 @@
     <div class="panel" :class="{active: page==='guide'}">
       <div class="panel-header">
         <div class="panel-title">How to Setup</div>
-        <div class="panel-subtitle">Get your Hermes Agent running in minutes</div>
+        <div class="panel-subtitle">Get your Atlas Agent running in minutes</div>
       </div>
       <div class="panel-body">
 
@@ -1297,8 +1296,8 @@
               Head over to the <strong>Setup</strong> page (left sidebar), select <strong>OpenRouter</strong> as provider, paste your API key, and enter the model name.
               <span class="step-note">
                 Want a different provider (Anthropic, DeepSeek, Groq, Cerebras, Mistral, etc.)? Open the
-                <a href="/?force=1" style="color:var(--accent2);">Hermes Dashboard</a> from the sidebar — the
-                <strong>Keys</strong> tab lists every provider Hermes supports out of the box, plus
+                <a href="/?force=1" style="color:var(--accent2);">Atlas Dashboard</a> from the sidebar — the
+                <strong>Keys</strong> tab lists every provider Atlas supports out of the box, plus
                 skills, toolsets, and analytics you can configure from there.
               </span>
             </li>
@@ -1312,7 +1311,7 @@
             Connect a Messaging Platform
           </div>
           <p style="font-size:13px;color:var(--text-dim);margin-bottom:14px;">
-            Hermes Agent works through messaging platforms. You need to connect at least one. The easiest to set up is <strong style="color:var(--text);">Telegram</strong>.
+            Atlas Agent works through messaging platforms. You need to connect at least one. The easiest to set up is <strong style="color:var(--text);">Telegram</strong>.
           </p>
           <ol class="step-list">
             <li>
@@ -1333,14 +1332,14 @@
               <span class="step-note">You can restrict access later by specifying individual Telegram user IDs.</span>
             </li>
             <li>
-              Click <strong>Save & Start</strong> on the bottom right — your Hermes Agent is now live!
+              Click <strong>Save & Start</strong> on the bottom right — your Atlas Agent is now live!
             </li>
           </ol>
         </div>
 
         <!-- Issue callout -->
         <div class="guide-callout">
-          Facing an issue or something not working as expected? <a href="https://github.com/praveen-ks-2001/hermes-agent-template/issues" target="_blank" rel="noopener">Create a GitHub issue</a> and we'll help you out.
+          Facing an issue or something not working as expected? <a href="https://github.com/matlee0409/atlas/issues" target="_blank" rel="noopener">Create a GitHub issue</a> and we'll help you out.
         </div>
 
       </div>
