@@ -14,3 +14,10 @@ pyyaml
 starlette
 uvicorn
 websockets
+httpx
+jinja2
+python-multipart
+pyyaml
+starlette
+uvicorn
+websockets
