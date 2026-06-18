@@ -143,6 +143,7 @@ ENV_VARS = [
     ("GITHUB_TOKEN",                 "GitHub token",                 "tool",       True),
     ("VOICE_TOOLS_OPENAI_KEY",       "OpenAI (voice/TTS)",           "tool",       True),
     ("HONCHO_API_KEY",               "Honcho (memory)",              "tool",       True),
+    ("COMPOSIO_API_KEY",             "Composio (MCP)",               "tool",       True),
     # ── Messaging channels ────────────────────────────────────────────────────
     ("TELEGRAM_BOT_TOKEN",           "Bot Token",                    "telegram",   True),
     ("TELEGRAM_ALLOWED_USERS",       "Allowed User IDs",             "telegram",   False),
@@ -294,6 +295,23 @@ def write_config_yaml(data: dict[str, str]) -> None:
         }]
     else:
         merged.pop("custom_providers", None)
+
+    # Composio MCP server — add/remove entry in mcp_servers based on whether
+    # the API key is configured. Does not touch any other mcp_servers entries.
+    composio_key = data.get("COMPOSIO_API_KEY", "").strip()
+    mcp_servers = dict(merged.get("mcp_servers") if isinstance(merged.get("mcp_servers"), dict) else {})
+    if composio_key:
+        mcp_servers["composio"] = {
+            "command": "npx",
+            "args": ["-y", "@composio/mcp@latest"],
+            "env": {"COMPOSIO_API_KEY": composio_key},
+        }
+    else:
+        mcp_servers.pop("composio", None)
+    if mcp_servers:
+        merged["mcp_servers"] = mcp_servers
+    else:
+        merged.pop("mcp_servers", None)
 
     with config_path.open("w") as f:
         yaml.safe_dump(merged, f, sort_keys=False, default_flow_style=False)
