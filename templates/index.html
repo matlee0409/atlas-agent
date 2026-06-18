@@ -861,6 +861,18 @@
             </div>
           </template>
 
+          <!-- Cloudflare Workers AI extra field (Account ID) -->
+          <template x-if="selectedProvider === 'Cloudflare Workers AI'">
+            <div>
+              <div class="field-gap">
+                <label class="field-label">Account ID</label>
+                <input type="text" :value="vars.CLOUDFLARE_ACCOUNT_ID||''" @input="vars.CLOUDFLARE_ACCOUNT_ID=$event.target.value"
+                       placeholder="abc123...">
+                <p class="hint">Found in the Cloudflare dashboard. Used to build the Workers AI endpoint URL.</p>
+              </div>
+            </div>
+          </template>
+
           <div class="field-gap" x-show="selectedProvider">
             <label class="field-label">LLM Model</label>
             <input type="text" :value="vars.LLM_MODEL||''" @input="vars.LLM_MODEL=$event.target.value"
@@ -1062,11 +1074,119 @@
           </div>
 
           <!-- WhatsApp -->
-          <div class="toggle-row" style="border-bottom:none;" @click="channelsEnabled.whatsapp=!channelsEnabled.whatsapp; vars.WHATSAPP_ENABLED=channelsEnabled.whatsapp?'true':'false'">
+          <div class="toggle-row" @click="channelsEnabled.whatsapp=!channelsEnabled.whatsapp; vars.WHATSAPP_ENABLED=channelsEnabled.whatsapp?'true':'false'">
             <input type="checkbox" :checked="channelsEnabled.whatsapp" @click.stop @change="channelsEnabled.whatsapp=$event.target.checked; vars.WHATSAPP_ENABLED=$event.target.checked?'true':'false'">
             <span class="toggle-icon">💬</span>
             <span class="toggle-label">WhatsApp</span>
             <span style="font-size:11px;color:var(--text-dim);margin-left:8px;">pairing via gateway logs on first run</span>
+          </div>
+
+          <!-- Line -->
+          <div class="toggle-row" @click="channelsEnabled.line=!channelsEnabled.line; if(!channelsEnabled.line) clearChannel('line')">
+            <input type="checkbox" :checked="channelsEnabled.line" @click.stop @change="channelsEnabled.line=$event.target.checked; if(!channelsEnabled.line) clearChannel('line')">
+            <span class="toggle-icon">💚</span>
+            <span class="toggle-label">Line</span>
+          </div>
+          <div class="toggle-body" x-show="channelsEnabled.line">
+            <div><label class="field-label">Channel Access Token</label><input type="password" :value="vars.LINE_CHANNEL_ACCESS_TOKEN||''" @input="vars.LINE_CHANNEL_ACCESS_TOKEN=$event.target.value" placeholder="Paste LINE channel access token"></div>
+          </div>
+
+          <!-- IRC -->
+          <div class="toggle-row" @click="channelsEnabled.irc=!channelsEnabled.irc; if(!channelsEnabled.irc) clearChannel('irc')">
+            <input type="checkbox" :checked="channelsEnabled.irc" @click.stop @change="channelsEnabled.irc=$event.target.checked; if(!channelsEnabled.irc) clearChannel('irc')">
+            <span class="toggle-icon">📡</span>
+            <span class="toggle-label">IRC</span>
+          </div>
+          <div class="toggle-body" x-show="channelsEnabled.irc">
+            <div><label class="field-label">Bot Nickname</label><input type="text" :value="vars.IRC_NICKNAME||''" @input="vars.IRC_NICKNAME=$event.target.value" placeholder="atlas-bot"></div>
+            <div class="field-gap"><label class="field-label">IRC Server</label><input type="text" :value="vars.IRC_SERVER||''" @input="vars.IRC_SERVER=$event.target.value" placeholder="irc.libera.chat"></div>
+          </div>
+
+          <!-- Signal -->
+          <div class="toggle-row" @click="channelsEnabled.signal=!channelsEnabled.signal; if(!channelsEnabled.signal) clearChannel('signal')">
+            <input type="checkbox" :checked="channelsEnabled.signal" @click.stop @change="channelsEnabled.signal=$event.target.checked; if(!channelsEnabled.signal) clearChannel('signal')">
+            <span class="toggle-icon">🔐</span>
+            <span class="toggle-label">Signal</span>
+          </div>
+          <div class="toggle-body" x-show="channelsEnabled.signal">
+            <div><label class="field-label">signal-cli API URL</label><input type="text" :value="vars.SIGNAL_HTTP_URL||''" @input="vars.SIGNAL_HTTP_URL=$event.target.value" placeholder="http://localhost:8080"></div>
+            <div class="field-gap"><label class="field-label">Account (phone number)</label><input type="text" :value="vars.SIGNAL_ACCOUNT||''" @input="vars.SIGNAL_ACCOUNT=$event.target.value" placeholder="+15551234567"></div>
+          </div>
+
+          <!-- Feishu / Lark -->
+          <div class="toggle-row" @click="channelsEnabled.feishu=!channelsEnabled.feishu; if(!channelsEnabled.feishu) clearChannel('feishu')">
+            <input type="checkbox" :checked="channelsEnabled.feishu" @click.stop @change="channelsEnabled.feishu=$event.target.checked; if(!channelsEnabled.feishu) clearChannel('feishu')">
+            <span class="toggle-icon">🪶</span>
+            <span class="toggle-label">Feishu / Lark</span>
+          </div>
+          <div class="toggle-body" x-show="channelsEnabled.feishu">
+            <div><label class="field-label">App ID</label><input type="text" :value="vars.FEISHU_APP_ID||''" @input="vars.FEISHU_APP_ID=$event.target.value" placeholder="cli_..."></div>
+            <div class="field-gap"><label class="field-label">App Secret</label><input type="password" :value="vars.FEISHU_APP_SECRET||''" @input="vars.FEISHU_APP_SECRET=$event.target.value" placeholder=""></div>
+          </div>
+
+          <!-- DingTalk -->
+          <div class="toggle-row" @click="channelsEnabled.dingtalk=!channelsEnabled.dingtalk; if(!channelsEnabled.dingtalk) clearChannel('dingtalk')">
+            <input type="checkbox" :checked="channelsEnabled.dingtalk" @click.stop @change="channelsEnabled.dingtalk=$event.target.checked; if(!channelsEnabled.dingtalk) clearChannel('dingtalk')">
+            <span class="toggle-icon">🔔</span>
+            <span class="toggle-label">DingTalk</span>
+          </div>
+          <div class="toggle-body" x-show="channelsEnabled.dingtalk">
+            <div><label class="field-label">Client ID</label><input type="text" :value="vars.DINGTALK_CLIENT_ID||''" @input="vars.DINGTALK_CLIENT_ID=$event.target.value" placeholder=""></div>
+            <div class="field-gap"><label class="field-label">Client Secret</label><input type="password" :value="vars.DINGTALK_CLIENT_SECRET||''" @input="vars.DINGTALK_CLIENT_SECRET=$event.target.value" placeholder=""></div>
+          </div>
+
+          <!-- ntfy -->
+          <div class="toggle-row" @click="channelsEnabled.ntfy=!channelsEnabled.ntfy; if(!channelsEnabled.ntfy) clearChannel('ntfy')">
+            <input type="checkbox" :checked="channelsEnabled.ntfy" @click.stop @change="channelsEnabled.ntfy=$event.target.checked; if(!channelsEnabled.ntfy) clearChannel('ntfy')">
+            <span class="toggle-icon">🔔</span>
+            <span class="toggle-label">ntfy</span>
+          </div>
+          <div class="toggle-body" x-show="channelsEnabled.ntfy">
+            <div><label class="field-label">Server URL</label><input type="text" :value="vars.NTFY_SERVER_URL||''" @input="vars.NTFY_SERVER_URL=$event.target.value" placeholder="https://ntfy.sh"></div>
+            <div class="field-gap"><label class="field-label">Publish Topic</label><input type="text" :value="vars.NTFY_PUBLISH_TOPIC||''" @input="vars.NTFY_PUBLISH_TOPIC=$event.target.value" placeholder="my-atlas-notifications"></div>
+          </div>
+
+          <!-- SimpleX -->
+          <div class="toggle-row" @click="channelsEnabled.simplex=!channelsEnabled.simplex; if(!channelsEnabled.simplex) clearChannel('simplex')">
+            <input type="checkbox" :checked="channelsEnabled.simplex" @click.stop @change="channelsEnabled.simplex=$event.target.checked; if(!channelsEnabled.simplex) clearChannel('simplex')">
+            <span class="toggle-icon">🔒</span>
+            <span class="toggle-label">SimpleX</span>
+          </div>
+          <div class="toggle-body" x-show="channelsEnabled.simplex">
+            <div><label class="field-label">Home Channel</label><input type="text" :value="vars.SIMPLEX_HOME_CHANNEL||''" @input="vars.SIMPLEX_HOME_CHANNEL=$event.target.value" placeholder="simplex:/contact#..."></div>
+          </div>
+
+          <!-- Microsoft Teams -->
+          <div class="toggle-row" @click="channelsEnabled.teams=!channelsEnabled.teams; if(!channelsEnabled.teams) clearChannel('teams')">
+            <input type="checkbox" :checked="channelsEnabled.teams" @click.stop @change="channelsEnabled.teams=$event.target.checked; if(!channelsEnabled.teams) clearChannel('teams')">
+            <span class="toggle-icon">🟦</span>
+            <span class="toggle-label">Microsoft Teams</span>
+          </div>
+          <div class="toggle-body" x-show="channelsEnabled.teams">
+            <div><label class="field-label">Client ID</label><input type="text" :value="vars.TEAMS_CLIENT_ID||''" @input="vars.TEAMS_CLIENT_ID=$event.target.value" placeholder="Azure AD app client ID"></div>
+            <p class="hint" style="margin-top:6px;">Full Teams config (tenant ID, client secret, channel ID) via the <a href="/?force=1" style="color:var(--accent2);">Atlas Dashboard</a> → Channels.</p>
+          </div>
+
+          <!-- Google Chat -->
+          <div class="toggle-row" @click="channelsEnabled.googlechat=!channelsEnabled.googlechat; if(!channelsEnabled.googlechat) clearChannel('googlechat')">
+            <input type="checkbox" :checked="channelsEnabled.googlechat" @click.stop @change="channelsEnabled.googlechat=$event.target.checked; if(!channelsEnabled.googlechat) clearChannel('googlechat')">
+            <span class="toggle-icon">💬</span>
+            <span class="toggle-label">Google Chat</span>
+          </div>
+          <div class="toggle-body" x-show="channelsEnabled.googlechat">
+            <div><label class="field-label">Service Account JSON path</label><input type="text" :value="vars.GOOGLE_APPLICATION_CREDENTIALS||''" @input="vars.GOOGLE_APPLICATION_CREDENTIALS=$event.target.value" placeholder="/run/secrets/google-sa.json"></div>
+            <p class="hint" style="margin-top:6px;">Path to the Google service account JSON file mounted in the container.</p>
+          </div>
+
+          <!-- Home Assistant -->
+          <div class="toggle-row" style="border-bottom:none;" @click="channelsEnabled.hass=!channelsEnabled.hass; if(!channelsEnabled.hass) clearChannel('hass')">
+            <input type="checkbox" :checked="channelsEnabled.hass" @click.stop @change="channelsEnabled.hass=$event.target.checked; if(!channelsEnabled.hass) clearChannel('hass')">
+            <span class="toggle-icon">🏠</span>
+            <span class="toggle-label">Home Assistant</span>
+          </div>
+          <div class="toggle-body" x-show="channelsEnabled.hass" style="border-bottom:none;">
+            <div><label class="field-label">Home Assistant URL</label><input type="text" :value="vars.HASS_URL||''" @input="vars.HASS_URL=$event.target.value" placeholder="http://homeassistant.local:8123"></div>
+            <div class="field-gap"><label class="field-label">Long-Lived Token</label><input type="password" :value="vars.HASS_TOKEN||''" @input="vars.HASS_TOKEN=$event.target.value" placeholder="eyJ0..."></div>
           </div>
 
         </div>
@@ -1418,31 +1538,37 @@ function app() {
     tools,
 
     providerMap: {
-      'OpenRouter':           { key: 'OPENROUTER_API_KEY',  modelKey: '_MODEL_OPENROUTER_API_KEY',  placeholder: 'sk-or-...' },
-      'DeepSeek':             { key: 'DEEPSEEK_API_KEY',    modelKey: '_MODEL_DEEPSEEK_API_KEY',    placeholder: 'sk-...'    },
-      'Qwen Cloud':           { key: 'DASHSCOPE_API_KEY',   modelKey: '_MODEL_DASHSCOPE_API_KEY',   placeholder: ''          },
-      'GLM / Z.AI':           { key: 'GLM_API_KEY',         modelKey: '_MODEL_GLM_API_KEY',         placeholder: ''          },
-      'Kimi':                 { key: 'KIMI_API_KEY',         modelKey: '_MODEL_KIMI_API_KEY',        placeholder: ''          },
-      'MiniMax':              { key: 'MINIMAX_API_KEY',      modelKey: '_MODEL_MINIMAX_API_KEY',     placeholder: ''          },
-      'HuggingFace':          { key: 'HF_TOKEN',             modelKey: '_MODEL_HF_TOKEN',            placeholder: 'hf_...'   },
-      'NVIDIA NIM':           { key: 'NVIDIA_API_KEY',       modelKey: '_MODEL_NVIDIA_API_KEY',      placeholder: 'nvapi-...' },
-      'NovitaAI':             { key: 'NOVITA_API_KEY',       modelKey: '_MODEL_NOVITA_API_KEY',      placeholder: ''          },
-      'Arcee AI':             { key: 'ARCEEAI_API_KEY',      modelKey: '_MODEL_ARCEEAI_API_KEY',     placeholder: ''          },
-      'Step Plan':            { key: 'STEPFUN_API_KEY',      modelKey: '_MODEL_STEPFUN_API_KEY',     placeholder: ''          },
-      'Google AI Studio':     { key: 'GEMINI_API_KEY',         modelKey: '_MODEL_GEMINI_API_KEY',         placeholder: 'AIza...'   },
-      'Fireworks AI':         { key: 'FIREWORKS_API_KEY',      modelKey: '_MODEL_FIREWORKS_API_KEY',      placeholder: 'fw_...'    },
-      'Anthropic (Claude)':   { key: 'ANTHROPIC_API_KEY',      modelKey: '_MODEL_ANTHROPIC_API_KEY',      placeholder: 'sk-ant-...' },
-      'xAI':                  { key: 'XAI_API_KEY',             modelKey: '_MODEL_XAI_API_KEY',             placeholder: 'xai-...', keyLabel: 'xAI API Key' },
-      'AWS Bedrock':          { key: 'AWS_ACCESS_KEY_ID',       modelKey: '_MODEL_AWS_ACCESS_KEY_ID',       placeholder: 'AKIA...', isBedrock: true, keyLabel: 'AWS Access Key ID' },
-      'GitHub Copilot':       { key: 'COPILOT_GITHUB_TOKEN',   modelKey: '_MODEL_COPILOT_GITHUB_TOKEN',   placeholder: 'ghp_... or gho_...', keyLabel: 'GitHub Token' },
-      'GMI Cloud':            { key: 'GMI_API_KEY',              modelKey: '_MODEL_GMI_API_KEY',              placeholder: '' },
-      'OpenCode Zen':         { key: 'OPENCODE_ZEN_API_KEY',    modelKey: '_MODEL_OPENCODE_ZEN_API_KEY',    placeholder: '' },
-      'OpenCode Go':          { key: 'OPENCODE_GO_API_KEY',     modelKey: '_MODEL_OPENCODE_GO_API_KEY',     placeholder: '' },
-      'Kilo Code':            { key: 'KILOCODE_API_KEY',         modelKey: '_MODEL_KILOCODE_API_KEY',         placeholder: '' },
-      'Ollama Cloud':         { key: 'OLLAMA_API_KEY',           modelKey: '_MODEL_OLLAMA_API_KEY',           placeholder: '' },
-      'Azure Foundry':        { key: 'AZURE_FOUNDRY_API_KEY',   modelKey: '_MODEL_AZURE_FOUNDRY_API_KEY',   placeholder: '', isAzure: true },
-      'Custom Endpoint':      { key: 'CUSTOM_PROVIDER_API_KEY',modelKey: '_MODEL_CUSTOM_PROVIDER_API_KEY',placeholder: '',         isCustom: true },
-      'xAI Grok (SuperGrok)': { key: null,                     modelKey: '_MODEL_XAI_OAUTH',              isOauth: 'xai' },
+      'OpenRouter':              { key: 'OPENROUTER_API_KEY',           modelKey: '_MODEL_OPENROUTER_API_KEY',           placeholder: 'sk-or-...' },
+      'Anthropic (Claude)':      { key: 'ANTHROPIC_API_KEY',            modelKey: '_MODEL_ANTHROPIC_API_KEY',            placeholder: 'sk-ant-...' },
+      'Google AI Studio':        { key: 'GEMINI_API_KEY',               modelKey: '_MODEL_GEMINI_API_KEY',               placeholder: 'AIza...' },
+      'xAI':                     { key: 'XAI_API_KEY',                  modelKey: '_MODEL_XAI_API_KEY',                  placeholder: 'xai-...', keyLabel: 'xAI API Key' },
+      'DeepSeek':                { key: 'DEEPSEEK_API_KEY',             modelKey: '_MODEL_DEEPSEEK_API_KEY',             placeholder: 'sk-...' },
+      'NVIDIA NIM':              { key: 'NVIDIA_API_KEY',               modelKey: '_MODEL_NVIDIA_API_KEY',               placeholder: 'nvapi-...' },
+      'Nous Portal':             { key: 'NOUS_API_KEY',                 modelKey: '_MODEL_NOUS_API_KEY',                 placeholder: '' },
+      'NovitaAI':                { key: 'NOVITA_API_KEY',               modelKey: '_MODEL_NOVITA_API_KEY',               placeholder: '' },
+      'Arcee AI':                { key: 'ARCEEAI_API_KEY',              modelKey: '_MODEL_ARCEEAI_API_KEY',              placeholder: '' },
+      'GMI Cloud':               { key: 'GMI_API_KEY',                  modelKey: '_MODEL_GMI_API_KEY',                  placeholder: '' },
+      'Step Fun':                { key: 'STEPFUN_API_KEY',              modelKey: '_MODEL_STEPFUN_API_KEY',              placeholder: '' },
+      'MiniMax':                 { key: 'MINIMAX_API_KEY',              modelKey: '_MODEL_MINIMAX_API_KEY',              placeholder: '' },
+      'MiniMax CN':              { key: 'MINIMAX_CN_API_KEY',           modelKey: '_MODEL_MINIMAX_CN_API_KEY',           placeholder: '' },
+      'HuggingFace':             { key: 'HF_TOKEN',                     modelKey: '_MODEL_HF_TOKEN',                     placeholder: 'hf_...' },
+      'Qwen Cloud':              { key: 'DASHSCOPE_API_KEY',            modelKey: '_MODEL_DASHSCOPE_API_KEY',            placeholder: '' },
+      'GLM / Z.AI (legacy)':     { key: 'GLM_API_KEY',                  modelKey: '_MODEL_GLM_API_KEY',                  placeholder: '' },
+      'Z.AI':                    { key: 'ZAI_API_KEY',                  modelKey: '_MODEL_ZAI_API_KEY',                  placeholder: '' },
+      'Kimi':                    { key: 'KIMI_API_KEY',                  modelKey: '_MODEL_KIMI_API_KEY',                 placeholder: '' },
+      'Kimi Coding':             { key: 'KIMI_CODING_API_KEY',          modelKey: '_MODEL_KIMI_CODING_API_KEY',          placeholder: '' },
+      'Alibaba Coding Plan':     { key: 'ALIBABA_CODING_PLAN_API_KEY',  modelKey: '_MODEL_ALIBABA_CODING_PLAN_API_KEY',  placeholder: '' },
+      'Xiaomi MiMo':             { key: 'XIAOMI_API_KEY',               modelKey: '_MODEL_XIAOMI_API_KEY',               placeholder: '' },
+      'Ollama Cloud':            { key: 'OLLAMA_API_KEY',               modelKey: '_MODEL_OLLAMA_API_KEY',               placeholder: '' },
+      'Cloudflare Workers AI':   { key: 'CLOUDFLARE_AUTH_TOKEN',        modelKey: '_MODEL_CLOUDFLARE_AUTH_TOKEN',        placeholder: '', isCloudflare: true, keyLabel: 'Auth Token' },
+      'GitHub Copilot':          { key: 'COPILOT_GITHUB_TOKEN',         modelKey: '_MODEL_COPILOT_GITHUB_TOKEN',         placeholder: 'ghp_... or gho_...', keyLabel: 'GitHub Token' },
+      'OpenCode Zen':            { key: 'OPENCODE_ZEN_API_KEY',         modelKey: '_MODEL_OPENCODE_ZEN_API_KEY',         placeholder: '' },
+      'OpenCode Go':             { key: 'OPENCODE_GO_API_KEY',          modelKey: '_MODEL_OPENCODE_GO_API_KEY',          placeholder: '' },
+      'Kilo Code':               { key: 'KILOCODE_API_KEY',             modelKey: '_MODEL_KILOCODE_API_KEY',             placeholder: '' },
+      'AWS Bedrock':             { key: 'AWS_ACCESS_KEY_ID',            modelKey: '_MODEL_AWS_ACCESS_KEY_ID',            placeholder: 'AKIA...', isBedrock: true, keyLabel: 'AWS Access Key ID' },
+      'Azure Foundry':           { key: 'AZURE_FOUNDRY_API_KEY',        modelKey: '_MODEL_AZURE_FOUNDRY_API_KEY',        placeholder: '', isAzure: true },
+      'Custom Endpoint':         { key: 'CUSTOM_PROVIDER_API_KEY',      modelKey: '_MODEL_CUSTOM_PROVIDER_API_KEY',      placeholder: '', isCustom: true },
+      'xAI Grok (SuperGrok)':    { key: null,                           modelKey: '_MODEL_XAI_OAUTH',                   isOauth: 'xai' },
     },
 
     xai: { loading: false, userCode: '', verificationUri: '', status: 'none', error: '' },
@@ -1452,6 +1578,8 @@ function app() {
     channelsEnabled: {
       telegram: false, discord: false, slack: false,
       email: false, mattermost: false, matrix: false, whatsapp: false,
+      line: false, irc: false, signal: false, feishu: false, dingtalk: false,
+      ntfy: false, simplex: false, teams: false, googlechat: false, hass: false,
     },
 
     toolsEnabled: Object.fromEntries(tools.map(t => [t.key, false])),
@@ -1538,6 +1666,16 @@ function app() {
         mattermost: ['MATTERMOST_URL','MATTERMOST_TOKEN'],
         matrix:     ['MATRIX_HOMESERVER','MATRIX_ACCESS_TOKEN','MATRIX_USER_ID'],
         whatsapp:   ['WHATSAPP_ENABLED'],
+        line:       ['LINE_CHANNEL_ACCESS_TOKEN'],
+        irc:        ['IRC_NICKNAME','IRC_SERVER'],
+        signal:     ['SIGNAL_HTTP_URL','SIGNAL_ACCOUNT'],
+        feishu:     ['FEISHU_APP_ID','FEISHU_APP_SECRET'],
+        dingtalk:   ['DINGTALK_CLIENT_ID','DINGTALK_CLIENT_SECRET'],
+        ntfy:       ['NTFY_SERVER_URL','NTFY_PUBLISH_TOPIC'],
+        simplex:    ['SIMPLEX_HOME_CHANNEL'],
+        teams:      ['TEAMS_CLIENT_ID'],
+        googlechat: ['GOOGLE_APPLICATION_CREDENTIALS'],
+        hass:       ['HASS_URL','HASS_TOKEN'],
       };
       for (const k of keysMap[ch] || []) this.vars[k] = '';
     },
@@ -1602,6 +1740,16 @@ function app() {
             mattermost: !!(this.vars.MATTERMOST_URL),
             matrix:     !!(this.vars.MATRIX_HOMESERVER),
             whatsapp:   this.vars.WHATSAPP_ENABLED === 'true',
+            line:       !!(this.vars.LINE_CHANNEL_ACCESS_TOKEN),
+            irc:        !!(this.vars.IRC_NICKNAME),
+            signal:     !!(this.vars.SIGNAL_HTTP_URL),
+            feishu:     !!(this.vars.FEISHU_APP_ID),
+            dingtalk:   !!(this.vars.DINGTALK_CLIENT_ID),
+            ntfy:       !!(this.vars.NTFY_SERVER_URL),
+            simplex:    !!(this.vars.SIMPLEX_HOME_CHANNEL),
+            teams:      !!(this.vars.TEAMS_CLIENT_ID),
+            googlechat: !!(this.vars.GOOGLE_APPLICATION_CREDENTIALS),
+            hass:       !!(this.vars.HASS_TOKEN),
           };
           // Detect active tools
           for (const t of this.tools) {
